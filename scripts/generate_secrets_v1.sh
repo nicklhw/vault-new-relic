@@ -4,8 +4,6 @@ customer=9
 count=0
 i=0
 
-
-
 while [ $customer -lt 2000 ]; do
 	vault secrets enable -path=customer_$customer -version=2 kv
 	while [ $count -lt 5 ]; do
@@ -16,4 +14,3 @@ while [ $customer -lt 2000 ]; do
 	customer=$[$customer + 1]
 	count=0
 done
-

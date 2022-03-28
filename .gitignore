@@ -1,0 +1,8 @@
+.idea/
+.vagrant/
+*.zip
+*.tgz
+.DS_Store
+vault-conf/vault
+vault-conf/vault.hclic
+vault-conf/keys.json

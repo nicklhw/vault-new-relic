@@ -1,0 +1,192 @@
+---
+- hosts: all
+  become: true
+  tasks:
+
+  - name: Create the vault group
+    group:
+      name: vault
+      state: present
+
+  - name: Create the vault user
+    user:
+      name: vault
+      group: vault
+      shell: /bin/false
+      create_home: true
+      home: /etc/vault.d
+
+  - name: Install unzip
+    package:
+      name: unzip
+      state: present
+
+  - name: Install jq
+    package:
+      name: jq
+      state: present
+
+  - name: Install Docker
+    shell: /vagrant/scripts/install-docker.sh
+
+  - name: Download Vault binary
+    get_url:
+      url: https://releases.hashicorp.com/vault/{{vault_version}}/vault_{{vault_version}}_linux_amd64.zip
+      dest: /tmp/{{vault_version}}_linux_amd64.zip
+      owner: vault
+      group: vault
+      mode: 0755
+    register: vault_download
+
+  - name: Unzip Vault archive
+    unarchive:
+      src: "{{ vault_download.dest }}"
+      dest: /usr/local/bin
+      copy: no
+      owner: vault
+      group: vault
+      mode: 0755
+
+  - name: Setting mlock syscall
+    become: true
+    shell: setcap cap_ipc_lock=+ep /usr/local/bin/vault
+
+  - name: Copying raw vault config to /etc/vault.d
+    copy:
+      src: /vagrant/vault-conf/vault_server.hcl
+      dest: /etc/vault.d/vault_server.hcl
+      remote_src: yes
+      owner: vault
+      group: vault
+      mode: 0666
+
+  - name: Copying vault license to /etc/vault.d
+    copy:
+      src: /vagrant/vault-conf/vault.hclic
+      dest: /etc/vault.d/vault.hclic
+      remote_src: yes
+      owner: vault
+      group: vault
+      mode: 0666
+
+  - name: Setting the bind address in vault_server.hcl
+    replace:
+      path: /etc/vault.d/vault_server.hcl
+      regexp: 'BIND_IP'
+      replace: "{{config_ip}}"
+
+  - name: Setting the node name in vault_server.hcl
+    replace:
+      path: /etc/vault.d/vault_server.hcl
+      regexp: 'NODE_NAME'
+      replace: "{{node_name}}"
+
+  - name: Creates raft directory
+    file:
+      path: /opt/raft/data
+      state: directory
+      owner: vault
+      group: vault
+      mode: 0776
+      recurse: yes
+
+  - name: Copying systemd vault file
+    copy:
+      src: /vagrant/vault-conf/vault.service
+      dest: /etc/systemd/system/vault.service
+      remote_src: yes
+      owner: root
+      group: root
+      mode: 0666
+
+  - name: Reloading systemd
+    systemd:
+      daemon_reload: yes
+      name: vault.service
+
+  - name: Start vault service
+    systemd:
+      state: started
+      name: vault.service
+      enabled: yes
+
+  - name: Updating vault_addr for .bashrc
+    lineinfile:
+      path: /home/vagrant/.bashrc
+      line: export VAULT_ADDR="http://127.0.0.1:8200"
+
+  - name: Initialize Vault
+    shell: vault operator init -key-shares=1 -key-threshold=1 -format json
+    environment:
+      VAULT_ADDR: "http://127.0.0.1:8200"
+    register: vault_init_results
+
+  - name: Write unseal key and root token to file
+    copy:
+      dest: "/vagrant/vault-conf/keys.json"
+      content: "{{vault_init_results.stdout}}"
+
+  - name: Unseal Vault
+    shell: vault operator unseal $(jq -r '.unseal_keys_b64 | .[0]' /vagrant/vault-conf/keys.json)
+    environment:
+      VAULT_ADDR: "http://127.0.0.1:8200"
+
+  # https://docs.treasuredata.com/display/public/PD/Installing+td-agent+on+Ubuntu+and+Debian
+  - name: Install Fluentd td-agent
+    shell: curl -L https://toolbelt.treasuredata.com/sh/install-ubuntu-bionic-td-agent4.sh | sh
+
+  # https://docs.newrelic.com/docs/logs/forward-logs/fluentd-plugin-log-forwarding/
+  - name: Install Fluentd New Relic plugin
+    shell: td-agent-gem install fluent-plugin-newrelic
+
+  - name: Copy td-agent conf
+    copy:
+      src: /vagrant/td-agent-conf/td-agent.conf
+      dest: /etc/td-agent/td-agent.conf
+      remote_src: yes
+
+  - name: Set New Relice license key in td-agent conf
+    replace:
+      path: /etc/td-agent/td-agent.conf
+      regexp: 'NR_LICENSE_KEY'
+      replace: "{{nr_license_key}}"
+
+  - name: Restart td-agent service
+    systemd:
+      state: restarted
+      name: td-agent.service
+      enabled: yes
+
+  # https://docs.newrelic.com/docs/infrastructure/host-integrations/host-integrations-list/statsd-monitoring-integration-version-2/#install
+  - name: Start newrelic-statsd container
+    shell: |
+      docker run \
+        -d --restart unless-stopped \
+        --name newrelic-statsd \
+        -h $(hostname) \
+        -e NR_ACCOUNT_ID={{nr_account_id}} \
+        -e NR_API_KEY={{nr_license_key}} \
+        -p 8125:8125/udp \
+        newrelic/nri-statsd:latest
+
+  - name: Create Vault audit log directory
+    ansible.builtin.file:
+      path: /var/log/vault
+      state: directory
+      owner: vault
+      group: vault
+      mode: '0777'
+      recurse: yes
+
+  - name: Enable Vault audit log device
+    shell: vault login $(jq -r '.root_token' /vagrant/vault-conf/keys.json) && vault audit enable file file_path=/var/log/vault/vault-audit.log mode=744
+    environment:
+      VAULT_ADDR: "http://127.0.0.1:8200"
+
+  - name: Install New Relic infrastructure agent
+    shell: curl -Ls https://download.newrelic.com/install/newrelic-cli/scripts/install.sh | bash && sudo NEW_RELIC_API_KEY={{nr_user_api_key}} NEW_RELIC_ACCOUNT_ID={{nr_account_id}} /usr/local/bin/newrelic install
+
+
+
+
+

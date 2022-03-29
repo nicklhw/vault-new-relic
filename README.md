@@ -2,10 +2,16 @@
 
 **This repo is for demo purposes and the steps detailed are not meant for production use.**
 
+This demo runs a local Vagrant environment with a single Vault Enterprise 1.8.4 server deployed.
+Resources inside the Vagrant VM is provisioned using Ansible, see the [ansible playbook](vault-playbook-vagrant.yml) 
+for details.
+
 ## Prerequisites
 
 * [Vagrant](https://www.vagrantup.com/downloads) installed 
 * Sign up for New Relic ONE and obtain your account ID, user API key, and license keys
+* This demo runs Vault Enterprise, as such, you need to place an enterprise license name `vault.hclic` under 
+  the `vault-conf` folder 
 
 ## Quick Start
 

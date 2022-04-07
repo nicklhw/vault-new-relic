@@ -52,7 +52,7 @@ vault login <ROOT TOKEN>
 
 ## Resources
 
-- [New Relic Statsd Integration](https://docs.newrelic.com/docs/infrastructure/host-integrations/host-integrations-list/statsd-monitoring-integration-version-2/#kubernetes)
+- [New Relic Statsd Integration](https://docs.newrelic.com/docs/infrastructure/host-integrations/host-integrations-list/statsd-monitoring-integration-version-2/#install)
 - [New Relic Fluentd Integration](https://docs.newrelic.com/docs/logs/forward-logs/fluentd-plugin-log-forwarding/)
 - [Monitor HashiCorp Vault metrics and logs](https://www.datadoghq.com/blog/monitor-vault-metrics-and-logs/)
 - [Monitor Telemetry & Audit Device Log Data](https://learn.hashicorp.com/tutorials/vault/monitor-telemetry-audit-splunk?in=vault/monitoring)
